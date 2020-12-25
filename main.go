@@ -5,7 +5,9 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"time"
 	"twimg/services"
+	"twimg/utils"
 )
 
 var (
@@ -50,6 +52,29 @@ func userInterface() {
 	fmt.Println()
 }
 
+func dataGroups(data []interface{}, piece int) ([]interface{}, int) {
+	newData := make([]interface{}, 0)
+	dataCounts := len(data)
+
+	groupCounts := dataCounts / piece
+	groupExtra := dataCounts % piece
+	groupNums := groupCounts
+
+	startIndex := 0
+	endIndex := 0
+	for i := 0; i < groupCounts; i++ {
+		startIndex = i * piece
+		endIndex = startIndex + piece
+		newData = append(newData, data[startIndex:endIndex])
+	}
+	if groupExtra != 0 {
+		lastData := data[endIndex : endIndex+groupExtra]
+		groupNums++
+		newData = append(newData, lastData)
+	}
+	return newData, groupNums
+}
+
 func main() {
 	help()
 	for {
@@ -69,11 +94,12 @@ func main() {
 			break
 		}
 	}
+	exectime := utils.TimeSuite.RunTime()
 	twitter := services.Twitter
 	fmt.Println("1.Setting Token...")
 	twitter.SetToken()
 	if twitter.Token != "" {
-		fmt.Println("2.Set Data...")
+		fmt.Println("2.Set Target...")
 		twitter.SetUser(userName)
 		if tweetLimit != 0 {
 			twitter.SetLimit(tweetLimit)
@@ -85,9 +111,15 @@ func main() {
 		fmt.Println("3.Checking Media...")
 		urls, total := twitter.MediaURLs()
 		if len(urls) != 0 {
-			fmt.Printf("4.Total: %d\n", total)
-			fmt.Println("5.Downloading Media...")
-			twitter.MediaDownload(urls, runtime.NumCPU())
+			urlGroups, groupNum := dataGroups(urls, 20)
+			fmt.Printf("4.Media: %d | Groups: %d\n", total, groupNum)
+			fmt.Println("5.Downloading media in groups...")
+			for index, urlGroup := range urlGroups {
+				fmt.Printf(" - Group %d\n", index+1)
+				urlG := urlGroup.([]interface{})
+				twitter.MediaDownload(urlG, runtime.NumCPU())
+				time.Sleep(time.Duration(2) * time.Second)
+			}
 			fmt.Println("6.Finished.")
 		} else {
 			fmt.Println("4.No Media")
@@ -96,6 +128,7 @@ func main() {
 		fmt.Println("Token Error, Please Check your configs/apikeys.json")
 	}
 
+	exectime()
 	fmt.Println("Ctrl+C to exit.")
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, os.Kill)

@@ -16,6 +16,7 @@ var (
 	excludeReplies bool   = false // 排除回复
 	includeRTS     bool   = true  // 包含转发
 	saveFolder     string = ""    // 保存文件夹
+	now            string = time.Now().Format("20060102_150405")
 	errImgs        []interface{}
 	errLock        sync.Mutex
 )
@@ -35,6 +36,8 @@ var Twitter *TwitterBasic
 func init() {
 	Twitter = new(TwitterBasic)
 	Twitter.Limit = 200
+	utils.Minireq.Header.Set("User-Agent", utils.UserAgent)
+	utils.Minireq.TimeOut(60)
 }
 
 // tokenReq 获取Token
@@ -141,6 +144,7 @@ func (twi *TwitterBasic) dlcore(u interface{}) interface{} {
 		savepath := SaveInfo(uDate, uID, url, saveFolder)
 		res := utils.Minireq.Get(url)
 		Save2File(res.RawData(), savepath)
+		time.Sleep(time.Duration(2) * time.Second)
 	}
 	return nil
 }
@@ -208,7 +212,7 @@ func (twi *TwitterBasic) GetTweets(user string, excludeReplies, includeRTS bool)
 				return nil
 			}
 			tweets = res.RawJSON().([]interface{})
-			fmt.Printf("Fetched %d responses\n", len(tweets))
+			fmt.Printf(" - Fetched %d responses\n", len(tweets))
 		}
 	}
 	return
@@ -232,6 +236,9 @@ func (twi *TwitterBasic) MediaURLs() (media []interface{}, total int) {
 			data := i.(map[string]interface{})
 			total = total + data["total"].(int)
 		}
+		folderName := twi.User + "_" + now
+		saveFolder = filepath.Join(utils.FileSuite.LocalPath(configs.Deployment()), folderName)
+		utils.FileSuite.Create(saveFolder)
 		return
 	}
 	return
@@ -239,13 +246,6 @@ func (twi *TwitterBasic) MediaURLs() (media []interface{}, total int) {
 
 // MediaDownload 下载
 func (twi *TwitterBasic) MediaDownload(urls []interface{}, thread int) {
-	utils.Minireq.Header.Set("User-Agent", utils.UserAgent)
-	utils.Minireq.TimeOut(60)
-
-	now := time.Now().Format("20060102_150405")
-	folderName := twi.User + "_" + now
-	saveFolder = filepath.Join(utils.FileSuite.LocalPath(configs.Deployment()), folderName)
-	utils.FileSuite.Create(saveFolder)
 	if len(urls) != 0 {
 		utils.TaskBoard(twi.dlcore, urls, thread)
 		if len(errImgs) != 0 {

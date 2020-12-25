@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"path/filepath"
+	"sync"
 	"time"
 	"twimg/configs"
 	"twimg/utils"
@@ -15,6 +16,8 @@ var (
 	excludeReplies bool   = false // 排除回复
 	includeRTS     bool   = true  // 包含转发
 	saveFolder     string = ""    // 保存文件夹
+	errImgs        []interface{}
+	errLock        sync.Mutex
 )
 
 // TwitterBasic 基类
@@ -56,8 +59,8 @@ func (twi *TwitterBasic) tokenReq(key, secret string) string {
 }
 
 // mediaFilter 推文过滤
-func (twi *TwitterBasic) mediaFilter(tweets []interface{}) (imgURLs []string) {
-	imgURLs = make([]string, 0)
+func (twi *TwitterBasic) mediaFilter(tweets []interface{}) (imgURLs []interface{}) {
+	imgURLs = make([]interface{}, 0)
 	for _, tweetR := range tweets {
 		tweet := tweetR.(map[string]interface{})
 		tweetUser := tweet["user"].(map[string]interface{})
@@ -67,13 +70,15 @@ func (twi *TwitterBasic) mediaFilter(tweets []interface{}) (imgURLs []string) {
 		} else {
 			statusCount = 20
 		}
+		tweetStatusIDStr := tweet["id_str"].(string)
 		tweetStatusID := Param2str(tweet["id"].(float64))
 		tweetCreateAt := DateFormat("20060102150405", tweet["created_at"].(string))
 		if _, ok := tweet["extended_entities"]; ok {
 			tweetEntities := tweet["extended_entities"].(map[string]interface{})
 			tweetMedia := tweetEntities["media"].([]interface{})
 
-			tURLs := make([]string, 0)
+			tTweetDetails := make(map[string]interface{})
+			tTweetMediaURLs := make([]string, 0)
 			for _, tMedia := range tweetMedia {
 				tMedium := tMedia.(map[string]interface{})
 				if _, ok := tMedium["video_info"]; ok {
@@ -88,22 +93,26 @@ func (twi *TwitterBasic) mediaFilter(tweets []interface{}) (imgURLs []string) {
 							tBitrate := tBitrates["bitrate"].(float64)
 							if tBitrate > zeroVal {
 								zeroVal = tBitrate
-								tVURL = tweetCreateAt + "_" + tweetStatusID + "#" + tBitrates["url"].(string)
+								tVURL = tBitrates["url"].(string)
 							}
 						}
 					}
 					if tVURL != "" {
-						tURLs = append(tURLs, tVURL)
+						tTweetMediaURLs = append(tTweetMediaURLs, tVURL)
 					}
 				} else {
 					imgURL := tMedium["media_url_https"].(string)
 					if imgURL != "" {
-						tURL := tweetCreateAt + "_" + tweetStatusID + "#" + imgURL + "?format=jpg&name=orig"
-						tURLs = append(tURLs, tURL)
+						tURL := imgURL + "?format=jpg&name=orig"
+						tTweetMediaURLs = append(tTweetMediaURLs, tURL)
 					}
 				}
 			}
-			imgURLs = append(imgURLs, tURLs...)
+			tTweetDetails["id"] = tweetStatusIDStr
+			tTweetDetails["date"] = tweetCreateAt
+			tTweetDetails["urls"] = tTweetMediaURLs
+			tTweetDetails["total"] = len(tTweetMediaURLs)
+			imgURLs = append(imgURLs, tTweetDetails)
 			if tweetStatusID != twi.Lastid {
 				twi.Lastid = tweetStatusID
 			}
@@ -115,12 +124,24 @@ func (twi *TwitterBasic) mediaFilter(tweets []interface{}) (imgURLs []string) {
 }
 
 // dlcore 下载函数
-func (twi *TwitterBasic) dlcore(u string) interface{} {
-	url, mediaName := SaveInfo(u)
-	savepath := filepath.Join(saveFolder, mediaName)
+func (twi *TwitterBasic) dlcore(u interface{}) interface{} {
+	data := u.(map[string]interface{})
+	uDate := data["date"].(string)
+	uID := data["id"].(string)
+	uURLs := data["urls"].([]string)
 
-	res := utils.Minireq.Get(url)
-	utils.FileSuite.Write(savepath, res.RawData())
+	for _, url := range uURLs {
+		defer func() {
+			if err := recover(); err != nil {
+				errLock.Lock()
+				errImgs = append(errImgs, u)
+				errLock.Unlock()
+			}
+		}()
+		savepath := SaveInfo(uDate, uID, url, saveFolder)
+		res := utils.Minireq.Get(url)
+		Save2File(res.RawData(), savepath)
+	}
 	return nil
 }
 
@@ -194,11 +215,9 @@ func (twi *TwitterBasic) GetTweets(user string, excludeReplies, includeRTS bool)
 }
 
 // MediaURLs 获取媒体地址
-func (twi *TwitterBasic) MediaURLs() (media []string) {
-	media = make([]string, 0)
-	if twi.User == "" {
-		// utils.UserError()
-	} else {
+func (twi *TwitterBasic) MediaURLs() (media []interface{}, total int) {
+	media = make([]interface{}, 0)
+	if twi.User != "" {
 		tweets := twi.GetTweets(twi.User, excludeReplies, includeRTS)
 		for len(tweets) > 0 {
 			mURLs := twi.mediaFilter(tweets)
@@ -208,18 +227,33 @@ func (twi *TwitterBasic) MediaURLs() (media []string) {
 			}
 			tweets = twi.GetTweets(twi.User, excludeReplies, includeRTS)
 		}
+		mediaUnique := RemoveDuplicate(media)
+		for _, i := range mediaUnique {
+			data := i.(map[string]interface{})
+			total = total + data["total"].(int)
+		}
+		return
 	}
 	return
 }
 
 // MediaDownload 下载
-func (twi *TwitterBasic) MediaDownload(urls []string, thread int) {
+func (twi *TwitterBasic) MediaDownload(urls []interface{}, thread int) {
 	utils.Minireq.Header.Set("User-Agent", utils.UserAgent)
+	utils.Minireq.TimeOut(60)
 
-	folderName := twi.User + "_" + time.Now().Format("20060102_150405")
+	now := time.Now().Format("20060102_150405")
+	folderName := twi.User + "_" + now
 	saveFolder = filepath.Join(utils.FileSuite.LocalPath(configs.Deployment()), folderName)
 	utils.FileSuite.Create(saveFolder)
 	if len(urls) != 0 {
-		utils.MultiRun(twi.dlcore, urls, thread)
+		utils.TaskBoard(twi.dlcore, urls, thread)
+		if len(errImgs) != 0 {
+			fmt.Printf("-----\nPlease wait 10 seconds\nBefore retrying the failed task...\nTotal: (%d)\n-----", len(errImgs))
+			time.Sleep(time.Duration(10) * time.Second)
+			for _, errImg := range errImgs {
+				twi.dlcore(errImg)
+			}
+		}
 	}
 }

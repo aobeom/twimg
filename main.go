@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"os/signal"
+	"runtime"
 	"twimg/services"
 )
 
@@ -61,7 +64,7 @@ func main() {
 			fmt.Println("Username is empty.")
 			continue
 		}
-		
+
 		if userName != "" {
 			break
 		}
@@ -80,11 +83,11 @@ func main() {
 		}
 		twitter.SetExclude(excludeRTS)
 		fmt.Println("3.Checking Media...")
-		urls := twitter.MediaURLs()
+		urls, total := twitter.MediaURLs()
 		if len(urls) != 0 {
-			fmt.Printf("4.Total: %d\n", len(urls))
+			fmt.Printf("4.Total: %d\n", total)
 			fmt.Println("5.Downloading Media...")
-			twitter.MediaDownload(urls, 16)
+			twitter.MediaDownload(urls, runtime.NumCPU())
 			fmt.Println("6.Finished.")
 		} else {
 			fmt.Println("4.No Media")
@@ -92,4 +95,9 @@ func main() {
 	} else {
 		fmt.Println("Token Error, Please Check your configs/apikeys.json")
 	}
+
+	fmt.Println("Ctrl+C to exit.")
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, os.Kill)
+	<-c
 }

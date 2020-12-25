@@ -4,39 +4,57 @@ import (
 	"sync"
 )
 
-// Config 配置并行任务
-//	Data: 任何执行完毕后返回的数据
-//	Numbers: 并行的数量
-//	WaitGroup: 等待 goroutine 执行完毕 Add / Done / Wait
-type Config struct {
-	Data      []interface{}
-	Numbers   chan interface{}
-	WaitGroup sync.WaitGroup
+// TaskConfig 任务配置
+//	Control 控制状态 Add() Done() Wait()
+//	Mutex 线程安全锁 Lock() Unlock()
+//	Workers 线程数
+//  Results 任务执行结果
+//	Counts 任务总数
+type TaskConfig struct {
+	Control sync.WaitGroup
+	Counts  int
+	Mutex   sync.Mutex
+	Results chan interface{}
+	Workers chan interface{}
 }
 
-// MultiRun 执行并行任务
-//	run 并行任务中实际执行任务的函数
-//	taskList 等待处理的任务
-//	thread 并行的数量
-func MultiRun(run func(string) interface{}, taskList []string, thread int) (data []interface{}) {
-	taskNum := len(taskList)
+// TaskBoard 任务公告栏
+//	runner 执行任务的函数
+//	tasks 任务列表
+//	worker 处理任务的线程数
+func TaskBoard(runner func(task interface{}) interface{}, tasks []interface{}, workers int) (data []interface{}) {
+	data = make([]interface{}, 0)
 
-	config := new(Config)
-	config.Numbers = make(chan interface{}, thread)
-	config.WaitGroup.Add(taskNum)
-
-	for i := 0; i < taskNum; i++ {
-		task := taskList[i]
-		config.Numbers <- task
+	// 任务配置
+	taskCfg := new(TaskConfig)
+	// 统计任务数量
+	taskCfg.Counts = len(tasks)
+	// 分配线程
+	taskCfg.Workers = make(chan interface{}, workers)
+	// 任务结果缓存
+	taskCfg.Results = make(chan interface{})
+	// 添加任务
+	taskCfg.Control.Add(taskCfg.Counts)
+	// 任务分配
+	for i := 0; i < taskCfg.Counts; i++ {
+		task := tasks[i]
+		// 领取任务
+		taskCfg.Workers <- task
 		go func() {
-			config.Data = append(config.Data, run(task))
-			config.WaitGroup.Done()
-			<-config.Numbers
+			defer taskCfg.Control.Done()
+			// 执行任务
+			taskCfg.Results <- runner(<-taskCfg.Workers)
 		}()
 	}
-	config.WaitGroup.Wait()
 
-	data = make([]interface{}, 0)
-	data = config.Data
+	go func() {
+		for taskResult := range taskCfg.Results {
+			taskCfg.Mutex.Lock()
+			data = append(data, taskResult)
+			taskCfg.Mutex.Unlock()
+		}
+	}()
+
+	taskCfg.Control.Wait()
 	return
 }

@@ -1,6 +1,9 @@
 package services
 
 import (
+	"io"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -21,22 +24,42 @@ func Param2str(p interface{}) string {
 
 // DateFormat UTC时间格式化
 func DateFormat(layout string, t string) string {
-	rawTime, _ := time.Parse("Mon Jan 02 15:04:05 Z0700 2006", t)
-	uTime := rawTime.Format(layout)
+	cnLocal, _ := time.LoadLocation("PRC")
+	// time.RubyDate
+	rawTime, _ := time.Parse("Mon Jan 02 15:04:05 -0700 2006", t)
+	uTime := rawTime.In(cnLocal).Format(layout)
 	return uTime
 }
 
 // SaveInfo 设置文件名
-func SaveInfo(url string) (u string, fn string) {
-	rawURLParts := strings.Split(url, "#")
-	uDate, uURL := rawURLParts[0], rawURLParts[1]
-
-	urlParts := strings.Split(uURL, "/")
+func SaveInfo(date, id, url, saveFolder string) (savepath string) {
+	urlParts := strings.Split(url, "/")
 	urlFilename := urlParts[len(urlParts)-1]
 	urlFnParts := strings.Split(urlFilename, "?")
 	uName := urlFnParts[0]
-
-	u = uURL
-	fn = uDate + "_" + uName
+	fn := date + "_" + id + "_" + uName
+	savepath = filepath.Join(saveFolder, fn)
 	return
+}
+
+// RemoveDuplicate 去重
+func RemoveDuplicate(data []interface{}) []interface{} {
+	result := make([]interface{}, 0, len(data))
+	tmp := map[interface{}]struct{}{}
+	for _, i := range data {
+		statusID := i.(map[string]interface{})["id"]
+		if _, ok := tmp[statusID]; !ok {
+			tmp[statusID] = struct{}{}
+			result = append(result, i)
+		}
+	}
+	return result
+}
+
+// Save2File 保存图片
+func Save2File(raw []byte, savepath string) {
+	dst, _ := os.Create(savepath)
+	src := strings.NewReader(string(raw))
+	io.Copy(dst, src)
+	defer dst.Close()
 }

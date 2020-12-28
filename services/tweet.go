@@ -16,7 +16,6 @@ var (
 	excludeReplies bool   = false // 排除回复
 	includeRTS     bool   = true  // 包含转发
 	saveFolder     string = ""    // 保存文件夹
-	now            string = time.Now().Format("20060102_150405")
 	errImgs        []interface{}
 	errLock        sync.Mutex
 )
@@ -38,6 +37,13 @@ func init() {
 	Twitter.Limit = 200
 	utils.Minireq.Header.Set("User-Agent", utils.UserAgent)
 	utils.Minireq.TimeOut(60)
+}
+
+func (twi *TwitterBasic) setDefault() {
+	statusFlag = 0
+	statusCount = 1
+	twi.Lastid = ""
+	twi.Limit = 200
 }
 
 // tokenReq 获取Token
@@ -236,6 +242,7 @@ func (twi *TwitterBasic) MediaURLs() (media []interface{}, total int) {
 			data := i.(map[string]interface{})
 			total = total + data["total"].(int)
 		}
+		now := time.Now().Format("20060102_150405")
 		folderName := twi.User + "_" + now
 		saveFolder = filepath.Join(utils.FileSuite.LocalPath(configs.Deployment()), folderName)
 		utils.FileSuite.Create(saveFolder)
@@ -249,11 +256,12 @@ func (twi *TwitterBasic) MediaDownload(urls []interface{}, thread int) {
 	if len(urls) != 0 {
 		utils.TaskBoard(twi.dlcore, urls, thread)
 		if len(errImgs) != 0 {
-			fmt.Printf("-----\nPlease wait 10 seconds\nBefore retrying the failed task...\nTotal: (%d)\n-----", len(errImgs))
+			fmt.Printf("-----\nPlease wait 10 seconds\nBefore retrying the failed task...\nTotal: (%d)\n-----\n", len(errImgs))
 			time.Sleep(time.Duration(10) * time.Second)
 			for _, errImg := range errImgs {
 				twi.dlcore(errImg)
 			}
 		}
+		twi.setDefault()
 	}
 }

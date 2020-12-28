@@ -63,3 +63,27 @@ func Save2File(raw []byte, savepath string) {
 	io.Copy(dst, src)
 	defer dst.Close()
 }
+
+// DataGroups 数据分组
+func DataGroups(data []interface{}, piece int) ([]interface{}, int) {
+	newData := make([]interface{}, 0)
+	dataCounts := len(data)
+
+	groupCounts := dataCounts / piece
+	groupExtra := dataCounts % piece
+	groupNums := groupCounts
+
+	startIndex := 0
+	endIndex := 0
+	for i := 0; i < groupCounts; i++ {
+		startIndex = i * piece
+		endIndex = startIndex + piece
+		newData = append(newData, data[startIndex:endIndex])
+	}
+	if groupExtra != 0 {
+		lastData := data[endIndex : endIndex+groupExtra]
+		groupNums++
+		newData = append(newData, lastData)
+	}
+	return newData, groupNums
+}

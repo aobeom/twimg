@@ -1,6 +1,7 @@
 package services
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -32,12 +33,12 @@ func DateFormat(layout string, t string) string {
 }
 
 // SaveInfo 设置文件名
-func SaveInfo(date, id, url, saveFolder string) (savepath string) {
+func SaveInfo(date, url, saveFolder string) (savepath string) {
 	urlParts := strings.Split(url, "/")
 	urlFilename := urlParts[len(urlParts)-1]
 	urlFnParts := strings.Split(urlFilename, "?")
 	uName := urlFnParts[0]
-	fn := date + "_" + id + "_" + uName
+	fn := fmt.Sprintf("%s_%s", date, uName)
 	savepath = filepath.Join(saveFolder, fn)
 	return
 }
@@ -57,10 +58,9 @@ func RemoveDuplicate(data []interface{}) []interface{} {
 }
 
 // Save2File 保存图片
-func Save2File(raw []byte, savepath string) {
+func Save2File(raw io.Reader, savepath string) {
 	dst, _ := os.Create(savepath)
-	src := strings.NewReader(string(raw))
-	io.Copy(dst, src)
+	io.Copy(dst, raw)
 	defer dst.Close()
 }
 

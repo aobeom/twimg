@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"net/http"
 	"path/filepath"
 	"sync"
 	"time"
@@ -68,18 +69,13 @@ func (twi *TwitterBasic) tokenReq(key, secret string) string {
 }
 
 // mediaFilter 推文过滤
-func (twi *TwitterBasic) mediaFilter(tweets []interface{}) (imgURLs []interface{}) {
+func (twi *TwitterBasic) mediaFilter(tweets []interface{}) (imgURLs []interface{}, tweetStatusCount float64) {
 	imgURLs = make([]interface{}, 0)
 	for _, tweetR := range tweets {
 		tweet := tweetR.(map[string]interface{})
 		tweetUser := tweet["user"].(map[string]interface{})
-		tweetStatusCount := tweetUser["statuses_count"].(float64)
-		if tweetStatusCount < 3300 {
-			statusCount = int(tweetStatusCount/200) + 2
-		} else {
-			statusCount = 20
-		}
-		tweetStatusIDStr := tweet["id_str"].(string)
+		tweetStatusCount = tweetUser["statuses_count"].(float64)
+
 		tweetStatusID := Param2str(tweet["id"].(float64))
 		tweetCreateAt := DateFormat("20060102150405", tweet["created_at"].(string))
 		if _, ok := tweet["extended_entities"]; ok {
@@ -117,7 +113,6 @@ func (twi *TwitterBasic) mediaFilter(tweets []interface{}) (imgURLs []interface{
 					}
 				}
 			}
-			tTweetDetails["id"] = tweetStatusIDStr
 			tTweetDetails["date"] = tweetCreateAt
 			tTweetDetails["urls"] = tTweetMediaURLs
 			tTweetDetails["total"] = len(tTweetMediaURLs)
@@ -136,7 +131,6 @@ func (twi *TwitterBasic) mediaFilter(tweets []interface{}) (imgURLs []interface{
 func (twi *TwitterBasic) dlcore(u interface{}) interface{} {
 	data := u.(map[string]interface{})
 	uDate := data["date"].(string)
-	uID := data["id"].(string)
 	uURLs := data["urls"].([]string)
 
 	for _, url := range uURLs {
@@ -147,9 +141,13 @@ func (twi *TwitterBasic) dlcore(u interface{}) interface{} {
 				errLock.Unlock()
 			}
 		}()
-		savepath := SaveInfo(uDate, uID, url, saveFolder)
-		res := utils.Minireq.Get(url)
-		Save2File(res.RawData(), savepath)
+		savepath := SaveInfo(uDate, url, saveFolder)
+		resp, err := http.Get(url)
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+		defer resp.Body.Close()
+		Save2File(resp.Body, savepath)
 		time.Sleep(time.Duration(2) * time.Second)
 	}
 	return nil
@@ -192,16 +190,14 @@ func (twi *TwitterBasic) SetToken() {
 }
 
 // GetTweets 获取所有Tweets
-func (twi *TwitterBasic) GetTweets(user string, excludeReplies, includeRTS bool) (tweets []interface{}) {
-	if twi.Token == "" {
-		// utils.TokenError()
-	} else {
+func (twi *TwitterBasic) GetTweets() (tweets []interface{}) {
+	if twi.Token != "" {
 		timelineURL := "https://api.twitter.com/1.1/statuses/user_timeline.json"
 		headers := utils.MiniHeaders{
-			"Authorization": "Bearer " + twi.Token,
+			"Authorization": fmt.Sprintf("Bearer %s", twi.Token),
 		}
 		params := utils.MiniParams{
-			"screen_name":     user,
+			"screen_name":     twi.User,
 			"count":           Param2str(twi.Limit),
 			"exclude_replies": Param2str(excludeReplies),
 			"include_rts":     Param2str(includeRTS),
@@ -228,24 +224,36 @@ func (twi *TwitterBasic) GetTweets(user string, excludeReplies, includeRTS bool)
 func (twi *TwitterBasic) MediaURLs() (media []interface{}, total int) {
 	media = make([]interface{}, 0)
 	if twi.User != "" {
-		tweets := twi.GetTweets(twi.User, excludeReplies, includeRTS)
+		// 创建文件夹
+		now := time.Now().Format("20060102150405")
+		folderName := twi.User + "_" + now
+		saveFolder = filepath.Join(utils.FileSuite.LocalPath(configs.Deployment()), folderName)
+		utils.FileSuite.Create(saveFolder)
+		// 获取地址
+		tweets := twi.GetTweets()
 		for len(tweets) > 0 {
-			mURLs := twi.mediaFilter(tweets)
+			mURLs, tCounts := twi.mediaFilter(tweets)
 			media = append(media, mURLs...)
 			if twi.Limit < 200 {
+				mediaUnique := RemoveDuplicate(media)
+				for _, i := range mediaUnique {
+					data := i.(map[string]interface{})
+					total = total + data["total"].(int)
+				}
 				return
 			}
-			tweets = twi.GetTweets(twi.User, excludeReplies, includeRTS)
+			if tCounts < 3300 {
+				statusCount = int(tCounts/200) + 2
+			} else {
+				statusCount = 20
+			}
+			tweets = twi.GetTweets()
 		}
 		mediaUnique := RemoveDuplicate(media)
 		for _, i := range mediaUnique {
 			data := i.(map[string]interface{})
 			total = total + data["total"].(int)
 		}
-		now := time.Now().Format("20060102_150405")
-		folderName := twi.User + "_" + now
-		saveFolder = filepath.Join(utils.FileSuite.LocalPath(configs.Deployment()), folderName)
-		utils.FileSuite.Create(saveFolder)
 		return
 	}
 	return

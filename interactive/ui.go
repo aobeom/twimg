@@ -28,9 +28,8 @@ func numCheck(s string) int {
 			return i
 		}
 		return -1
-	} else {
-		return 0
 	}
+	return 0
 }
 
 // UIRun UI Mode

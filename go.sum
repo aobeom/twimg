@@ -4,6 +4,8 @@ github.com/Kodeworks/golang-image-ico v0.0.0-20141118225523-73f0f4cfade9/go.mod 
 github.com/akavel/rsrc v0.8.0/go.mod h1:uLoCtb9J+EyAqh+26kdrTgmzRBFPGOolLWKpdxkKq+c=
 github.com/aobeom/minireq v1.0.1 h1:v8M1rjTnNpjugdjM9msxIn4NCvUBUChIWsUA6j5c2/c=
 github.com/aobeom/minireq v1.0.1/go.mod h1:Y9etC33ATDWYz7kGu0H0XvGGcsqTDxWQq5GZ8kvYIcI=
+github.com/aobeom/minireq v1.0.3 h1:e3DvFHKeJ4ZzR5jpMNLlTqvZEfNaaBLkglVK4ULZyMc=
+github.com/aobeom/minireq v1.0.3/go.mod h1:Y9etC33ATDWYz7kGu0H0XvGGcsqTDxWQq5GZ8kvYIcI=
 github.com/aobeom/minitools v1.0.4 h1:IxdYWub8XOtmaU8R9LDtWws5/uJrfRzK9uO4D3zBM0A=
 github.com/aobeom/minitools v1.0.4/go.mod h1:9+VRA2zOsRzA82a2AAd3HEpahzLpaJk91C0QEH4mMro=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

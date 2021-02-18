@@ -33,12 +33,12 @@ func DateFormat(layout string, t string) string {
 }
 
 // SaveInfo 设置文件名
-func SaveInfo(date, url, saveFolder string) (savepath string) {
+func SaveInfo(date, sid, url, saveFolder string) (savepath string) {
 	urlParts := strings.Split(url, "/")
 	urlFilename := urlParts[len(urlParts)-1]
 	urlFnParts := strings.Split(urlFilename, "?")
 	uName := urlFnParts[0]
-	fn := fmt.Sprintf("%s_%s", date, uName)
+	fn := fmt.Sprintf("%s_%s_%s", date, sid, uName)
 	savepath = filepath.Join(saveFolder, fn)
 	return
 }

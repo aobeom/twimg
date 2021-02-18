@@ -1,8 +1,8 @@
 package services
 
 import (
+	"encoding/json"
 	"fmt"
-	"net/http"
 	"path/filepath"
 	"sync"
 	"time"
@@ -16,6 +16,7 @@ var (
 	statusCount    int    = 1     // 推文终止参照值
 	excludeReplies bool   = false // 排除回复
 	includeRTS     bool   = true  // 包含转发
+	s5Proxy        string = ""    // 设置S5代理
 	saveFolder     string = ""    // 保存文件夹
 	errImgs        []interface{}
 	errLock        sync.Mutex
@@ -73,12 +74,11 @@ func (twi *TwitterBasic) mediaFilter(tweets []interface{}) (imgURLs []interface{
 	imgURLs = make([]interface{}, 0)
 	for _, tweetR := range tweets {
 		tweet := tweetR.(map[string]interface{})
-		tweetUser := tweet["user"].(map[string]interface{})
-		tweetStatusCount = tweetUser["statuses_count"].(float64)
-
-		tweetStatusID := Param2str(tweet["id"].(float64))
-		tweetCreateAt := DateFormat("20060102150405", tweet["created_at"].(string))
+		tweetStatusID := tweet["id"].(json.Number).String()
 		if _, ok := tweet["extended_entities"]; ok {
+			tweetUser := tweet["user"].(map[string]interface{})
+			tweetStatusCount, _ = tweetUser["statuses_count"].(json.Number).Float64()
+			tweetCreateAt := DateFormat("20060102150405", tweet["created_at"].(string))
 			tweetEntities := tweet["extended_entities"].(map[string]interface{})
 			tweetMedia := tweetEntities["media"].([]interface{})
 
@@ -95,7 +95,7 @@ func (twi *TwitterBasic) mediaFilter(tweets []interface{}) (imgURLs []interface{
 					for _, tVar := range tVariants {
 						tBitrates := tVar.(map[string]interface{})
 						if _, ok := tBitrates["bitrate"]; ok {
-							tBitrate := tBitrates["bitrate"].(float64)
+							tBitrate, _ := tBitrates["bitrate"].(json.Number).Float64()
 							if tBitrate > zeroVal {
 								zeroVal = tBitrate
 								tVURL = tBitrates["url"].(string)
@@ -113,6 +113,7 @@ func (twi *TwitterBasic) mediaFilter(tweets []interface{}) (imgURLs []interface{
 					}
 				}
 			}
+			tTweetDetails["id"] = tweetStatusID
 			tTweetDetails["date"] = tweetCreateAt
 			tTweetDetails["urls"] = tTweetMediaURLs
 			tTweetDetails["total"] = len(tTweetMediaURLs)
@@ -130,6 +131,7 @@ func (twi *TwitterBasic) mediaFilter(tweets []interface{}) (imgURLs []interface{
 // dlcore 下载函数
 func (twi *TwitterBasic) dlcore(u interface{}) interface{} {
 	data := u.(map[string]interface{})
+	uID := data["id"].(string)
 	uDate := data["date"].(string)
 	uURLs := data["urls"].([]string)
 
@@ -141,13 +143,12 @@ func (twi *TwitterBasic) dlcore(u interface{}) interface{} {
 				errLock.Unlock()
 			}
 		}()
-		savepath := SaveInfo(uDate, url, saveFolder)
-		resp, err := http.Get(url)
-		if err != nil {
-			fmt.Println(err.Error())
-		}
-		defer resp.Body.Close()
-		Save2File(resp.Body, savepath)
+		savepath := SaveInfo(uDate, uID, url, saveFolder)
+		request := utils.NewHTTP(s5Proxy)
+		res := request.Get(url)
+		data := res.RawRes.Body
+		defer data.Close()
+		Save2File(data, savepath)
 		time.Sleep(time.Duration(2) * time.Second)
 	}
 	return nil
@@ -213,7 +214,7 @@ func (twi *TwitterBasic) GetTweets() (tweets []interface{}) {
 			if statusFlag > statusCount {
 				return nil
 			}
-			tweets = res.RawJSON().([]interface{})
+			tweets = res.RawNumJSON().([]interface{})
 			fmt.Printf(" - Fetched %d responses\n", len(tweets))
 		}
 	}
@@ -260,8 +261,9 @@ func (twi *TwitterBasic) MediaURLs() (media []interface{}, total int) {
 }
 
 // MediaDownload 下载
-func (twi *TwitterBasic) MediaDownload(urls []interface{}, thread int) {
+func (twi *TwitterBasic) MediaDownload(urls []interface{}, thread int, proxy string) {
 	if len(urls) != 0 {
+		s5Proxy = proxy
 		utils.TaskBoard(twi.dlcore, urls, thread)
 		if len(errImgs) != 0 {
 			fmt.Printf("-----\nPlease wait 10 seconds\nBefore retrying the failed task...\nTotal: (%d)\n-----\n", len(errImgs))

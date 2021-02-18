@@ -14,6 +14,7 @@ var (
 	userName     string
 	tweetLimit   int
 	tweetID      string
+	s5Proxy      string
 	tweetExclude string
 	excludeRTS   bool
 )
@@ -29,6 +30,7 @@ func CmdHelp() {
 	fmt.Println("ExcludeRTS: no")
 	fmt.Println("Starting ID: 1334542969530183683")
 	fmt.Println("Limit: 20")
+	fmt.Println("socks5 Proxy: 127.0.0.1:1080")
 	fmt.Println()
 	fmt.Println("[ExcludeRTS] means to exclude forwarding and reply, Default yes.")
 	fmt.Println("[Starting ID] means to start fetched from this one.")
@@ -50,6 +52,9 @@ func CmdUserInterface() {
 
 	fmt.Printf("Starting ID: ")
 	fmt.Scanln(&tweetID)
+
+	fmt.Printf("S5 Proxy: ")
+	fmt.Scanln(&s5Proxy)
 
 	fmt.Println()
 }
@@ -97,7 +102,7 @@ func CmdRun() {
 			for index, urlGroup := range urlGroups {
 				fmt.Printf(" - Group %d\n", index+1)
 				urlG := urlGroup.([]interface{})
-				twitter.MediaDownload(urlG, runtime.NumCPU())
+				twitter.MediaDownload(urlG, runtime.NumCPU(), s5Proxy)
 				time.Sleep(time.Duration(2) * time.Second)
 			}
 			fmt.Println("6.Finished.")

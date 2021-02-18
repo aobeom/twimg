@@ -47,12 +47,14 @@ func UIRun() {
 	uiUsername := widget.NewEntry()
 	uiLimit := widget.NewEntry()
 	uiStatusID := widget.NewEntry()
+	proxyEntry := widget.NewEntry()
 	uiHelp := widget.NewLabel("")
 	uiStatus := widget.NewLabel("")
 
 	uiUsername.SetPlaceHolder("@username")
 	uiLimit.SetPlaceHolder("Limit")
 	uiStatusID.SetPlaceHolder("Latest ID")
+	proxyEntry.SetPlaceHolder("Socks5 Proxy")
 
 	uiExclude := widget.NewCheck("Exclude", func(e bool) {
 		tExclude = e
@@ -71,11 +73,15 @@ func UIRun() {
 				uiHelp.SetText("Set Target...")
 				tLimit := numCheck(uiLimit.Text)
 				if tLimit != -1 {
+					var proxy string
 					if tLimit != 0 {
 						twitter.SetLimit(tLimit)
 					}
 					if tStatusID != "" {
 						twitter.SetLastID(tStatusID)
+					}
+					if proxyEntry.Text != "" {
+						proxy = proxyEntry.Text
 					}
 					twitter.SetExclude(tExclude)
 					twitter.SetUser(tUsername)
@@ -88,7 +94,7 @@ func UIRun() {
 						for index, urlGroup := range urlGroups {
 							uiStatus.SetText(fmt.Sprintf(" - Group %d", index+1))
 							urlG := urlGroup.([]interface{})
-							twitter.MediaDownload(urlG, runtime.NumCPU())
+							twitter.MediaDownload(urlG, runtime.NumCPU(), proxy)
 							time.Sleep(time.Duration(2) * time.Second)
 						}
 						uiHelp.SetText("Finished.")
@@ -121,6 +127,7 @@ func UIRun() {
 		uiUsername,
 		uiLimit,
 		uiStatusID,
+		proxyEntry,
 		uiExclude,
 		uiDownload,
 		uiHelp,

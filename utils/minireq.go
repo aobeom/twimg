@@ -28,3 +28,12 @@ type MiniAuth = minireq.Auth
 func init() {
 	Minireq = minireq.Requests()
 }
+
+// NewHTTP 创建一个HTTP Client
+func NewHTTP(proxy string) *minireq.MiniRequest {
+	request := minireq.Requests()
+	if proxy != "" {
+		request.Proxy(proxy)
+	}
+	return request
+}

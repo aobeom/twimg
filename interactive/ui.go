@@ -10,10 +10,11 @@ import (
 	"twimg/services"
 	"twimg/theme"
 
-	"fyne.io/fyne"
-	"fyne.io/fyne/app"
-	"fyne.io/fyne/dialog"
-	"fyne.io/fyne/widget"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/widget"
 )
 
 func numCheck(s string) int {
@@ -123,7 +124,7 @@ func UIRun() {
 		uiStatus.SetText(fmt.Sprintf("Time: %v", tc))
 	})
 
-	content := widget.NewVBox(
+	content := container.NewVBox(
 		uiUsername,
 		uiLimit,
 		uiStatusID,
